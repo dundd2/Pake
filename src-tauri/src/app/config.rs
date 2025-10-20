@@ -5,6 +5,7 @@ pub struct WindowConfig {
     pub url: String,
     pub hide_title_bar: bool,
     pub fullscreen: bool,
+    pub maximize: bool,
     pub width: f64,
     pub height: f64,
     pub resizable: bool,
@@ -17,6 +18,8 @@ pub struct WindowConfig {
     pub incognito: bool,
     pub title: Option<String>,
     pub enable_wasm: bool,
+    pub enable_drag_drop: bool,
+    pub start_to_tray: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,6 +61,8 @@ pub struct PakeConfig {
     pub system_tray: FunctionON,
     pub system_tray_path: String,
     pub proxy_url: String,
+    #[serde(default)]
+    pub multi_instance: bool,
 }
 
 impl PakeConfig {

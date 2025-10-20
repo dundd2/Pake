@@ -1,4 +1,8 @@
+# CLI 使用指南
+
 <h4 align="right"><strong><a href="cli-usage.md">English</a></strong> | 简体中文</h4>
+
+完整的命令行参数说明和基础用法指南。
 
 ## 安装
 
@@ -28,50 +32,24 @@ echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-<details>
-<summary><strong>Windows/Linux 注意事项</strong></summary>
+**前置条件：**
 
-- **非常重要**：请参阅 Tauri 的 [依赖项指南](https://tauri.app/start/prerequisites/)。
-- 对于 Windows 用户，请确保至少安装了 `Win10 SDK(10.0.19041.0)` 和 `Visual Studio Build Tools 2022（版本 17.2 或更高）`，此外还需要安装以下组件：
-  1. Microsoft Visual C++ 2015-2022 Redistributable (x64)
-  2. Microsoft Visual C++ 2015-2022 Redistributable (x86)
-  3. Microsoft Visual C++ 2012 Redistributable (x86)（可选）
-  4. Microsoft Visual C++ 2013 Redistributable (x86)（可选）
-  5. Microsoft Visual C++ 2008 Redistributable (x86)（可选）
-
-  **Windows ARM（ARM64）支持**：在 Visual Studio Installer 中的"单个组件"下安装"MSVC v143 - VS 2022 C++ ARM64 构建工具"。系统会自动检测 ARM64 架构并构建原生 ARM64 二进制文件。
-
-- 对于 Ubuntu 用户，在开始之前，建议运行以下命令以安装所需的依赖项：
-
-  ```bash
-  sudo apt install libdbus-1-dev \
-      libsoup-3.0-dev \
-      libjavascriptcoregtk-4.1-dev \
-      libwebkit2gtk-4.1-dev \
-      build-essential \
-      curl \
-      wget \
-      libssl-dev \
-      libgtk-3-dev \
-      libayatana-appindicator3-dev \
-      librsvg2-dev \
-      gnome-video-effects \
-      gnome-video-effects-extra
-  ```
-
-</details>
+- Node.js ≥18.0.0
+- Rust ≥1.78.0（如缺失将自动安装）
+- **Windows/Linux**：详细系统依赖请参考 [高级用法指南](advanced-usage_CN.md#前置条件)
 
 ## 快速开始
 
 ```bash
-# 基础用法 - 只需要提供URL
-pake https://weekly.tw93.fun --name "Weekly"
+# 基础用法 - 自动获取网站图标
+pake https://github.com --name "GitHub"
 
-# 自定义图标和窗口大小（macOS示例）
-pake https://weekly.tw93.fun --name "Weekly" --icon https://cdn.tw93.fun/pake/weekly.icns --width 1200 --height 800
+# 高级用法：自定义选项
+pake https://weekly.tw93.fun --name "Weekly" --icon https://cdn.tw93.fun/pake/weekly.icns --width 1200 --height 800 --hide-title-bar
 
-# macOS 沉浸式体验
-pake https://weekly.tw93.fun --name "Weekly" --hide-title-bar
+# 完整示例：多个选项组合使用
+pake https://github.com --name "GitHub Desktop" --width 1400 --height 900 --show-system-tray --debug
+
 ```
 
 ## 命令行使用
@@ -94,14 +72,14 @@ pake [url] [options]
 
 您可以通过传递以下选项来定制打包过程。以下是最常用的选项：
 
-| 选项               | 描述                     | 示例                                           |
-| ------------------ | ------------------------ | ---------------------------------------------- |
-| `--name`           | 应用程序名称             | `--name "Weekly"`                              |
-| `--icon`           | 应用程序图标             | `--icon https://cdn.tw93.fun/pake/weekly.icns` |
-| `--width`          | 窗口宽度（默认：1200px） | `--width 1400`                                 |
-| `--height`         | 窗口高度（默认：780px）  | `--height 900`                                 |
-| `--hide-title-bar` | 沉浸式标题栏（仅macOS）  | `--hide-title-bar`                             |
-| `--debug`          | 启用开发者工具           | `--debug`                                      |
+| 选项               | 描述                                 | 示例                                           |
+| ------------------ | ------------------------------------ | ---------------------------------------------- |
+| `--name`           | 应用程序名称                         | `--name "Weekly"`                              |
+| `--icon`           | 自定义图标（可选，自动获取网站图标） | `--icon https://cdn.tw93.fun/pake/weekly.icns` |
+| `--width`          | 窗口宽度（默认：1200px）             | `--width 1400`                                 |
+| `--height`         | 窗口高度（默认：780px）              | `--height 900`                                 |
+| `--hide-title-bar` | 沉浸式标题栏（仅macOS）              | `--hide-title-bar`                             |
+| `--debug`          | 启用开发者工具                       | `--debug`                                      |
 
 完整选项请参见下面的详细说明：
 
@@ -124,16 +102,22 @@ pake [url] [options]
 
 #### [icon]
 
-指定应用程序的图标，支持本地或远程文件，不传此参数时，Pake 会智能获取网站图标。自定义图标可访问 [icon-icons](https://icon-icons.com) 或 [macOSicons](https://macosicons.com/#/) 下载。
+**可选参数**：不传此参数时，Pake 会自动获取网站图标并转换为对应格式。如需自定义图标，可访问 [icon-icons](https://icon-icons.com) 或 [macOSicons](https://macosicons.com/#/) 下载。
 
-- macOS 要求使用 `.icns` 格式。
-- Windows 要求使用 `.ico` 格式。
-- Linux 要求使用 `.png` 格式。
+支持本地或远程文件，自动转换为平台所需格式：
+
+- macOS：`.icns` 格式
+- Windows：`.ico` 格式
+- Linux：`.png` 格式
 
 ```shell
 --icon <path>
 
 # 示例：
+# 不传 --icon 参数，自动获取网站图标
+pake https://github.com --name GitHub
+
+# 使用自定义图标
 --icon ./my-icon.png
 --icon https://cdn.tw93.fun/pake/weekly.icns  # 远程图标（.icns适用于macOS）
 ```
@@ -168,6 +152,14 @@ pake [url] [options]
 
 ```shell
 --fullscreen
+```
+
+#### [maximize]
+
+设置应用程序是否在启动时最大化窗口，默认为 `false`。使用以下命令可以设置应用程序启动时窗口最大化。
+
+```shell
+--maximize
 ```
 
 #### [activation-shortcut]
@@ -292,10 +284,40 @@ pake [url] [options]
 
 #### [hide-on-close]
 
-点击关闭按钮时隐藏窗口而不是退出应用程序。默认为 `true`。
+点击关闭按钮时隐藏窗口而不是退出应用程序。平台特定默认值：macOS 为 `true`，Windows/Linux 为 `false`。
 
 ```shell
+# 关闭时隐藏（macOS 默认行为）
 --hide-on-close
+--hide-on-close true
+
+# 立即关闭应用程序（Windows/Linux 默认行为）
+--hide-on-close false
+```
+
+#### [start-to-tray]
+
+启动时将应用程序最小化到系统托盘而不是显示窗口。必须与 `--show-system-tray` 一起使用。默认为 `false`。
+
+```shell
+--start-to-tray
+
+# 示例：启动时隐藏到托盘（必须与 --show-system-tray 一起使用）
+pake https://github.com --name GitHub --show-system-tray --start-to-tray
+```
+
+**注意**：双击托盘图标可以显示/隐藏窗口。如果不与 `--show-system-tray` 一起使用，此选项将被忽略。
+
+#### [title]
+
+设置窗口标题栏文本，macOS 未指定时不显示标题，Windows/Linux 回退使用应用名称。
+
+```shell
+--title <string>
+
+# 示例：
+--title "我的应用"
+--title "音乐播放器"
 ```
 
 #### [incognito]
@@ -319,16 +341,39 @@ pake [url] [options]
 pake https://flutter.dev --name FlutterApp --wasm
 ```
 
-#### [title]
+#### [enable-drag-drop]
 
-设置窗口标题栏文本。如果未指定，窗口标题将为空。
+启用原生拖拽功能。默认为 `false`。启用后，允许在应用中进行拖拽操作，如重新排序项目、文件上传以及其他在常规浏览器中有效的交互式拖拽行为。
 
 ```shell
---title <string>
+--enable-drag-drop
 
-# 示例：
---title "我的应用"
---title "音乐播放器"
+# 示例：打包需要拖拽功能的应用
+pake https://planka.example.com --name PlankApp --enable-drag-drop
+```
+
+#### [keep-binary]
+
+保留原始二进制文件与安装包一起。默认为 `false`。启用后，除了平台特定的安装包外，还会输出一个可独立运行的可执行文件。
+
+```shell
+--keep-binary
+
+# 示例：同时生成安装包和独立可执行文件
+pake https://github.com --name GitHub --keep-binary
+```
+
+**输出结果**：同时创建安装包和独立可执行文件（Unix 系统为 `AppName-binary`，Windows 为 `AppName.exe`）。
+
+#### [multi-instance]
+
+允许打包后的应用同时运行多个实例。默认为 `false`，此时再次启动只会聚焦已有窗口。启用该选项后，可以同时打开同一个应用的多个窗口。
+
+```shell
+--multi-instance
+
+# 示例：允许聊天应用同时开多个窗口
+pake https://chat.example.com --name ChatApp --multi-instance
 ```
 
 #### [installer-language]
@@ -388,39 +433,22 @@ pake ./my-app/index.html --name "my-app" --use-local-file
 
 完成上述步骤后，您的应用程序应该已经成功打包。请注意，根据您的系统配置和网络状况，打包过程可能需要一些时间。请耐心等待，一旦打包完成，您就可以在指定的目录中找到应用程序安装包。
 
-## 开发调试
-
-开发时可以修改 `bin/defaults.ts` 中 `DEFAULT_DEV_PAKE_OPTIONS` 配置，配置项和 `pake-cli` 配置说明保持一致
-
-```typescript
-export const DEFAULT_DEV_PAKE_OPTIONS: PakeCliOptions & { url: string } = {
-  ...DEFAULT_PAKE_OPTIONS,
-  url: "https://weekly.tw93.fun/",
-  name: "Weekly",
-};
-```
-
-之后运行
-
-```bash
-pnpm run cli:dev
-```
-
-脚本会读取上述配置并使用 `watch` 模式打包指定的 `app`，对 `pake-cli` 代码和 `pake` 的修改都会实时热更新。
-
 ## Docker 使用
 
 ```shell
-# 在Linux上，您可以通过 Docker 运行 Pake CLI。
-docker run -it --rm \ # Run interactively, remove container after exit
-    -v YOUR_DIR:/output \ # Files from container's /output will be in YOU_DIR
+# 在 Linux 上通过 Docker 运行 Pake CLI（AppImage 构建需要 FUSE 权限）
+docker run --rm --privileged \
+    --device /dev/fuse \
+    --security-opt apparmor=unconfined \
+    -v YOUR_DIR:/output \
     ghcr.io/tw93/pake \
     <arguments>
 
-# For example:
-docker run -it --rm \
+# 例如：
+docker run --rm --privileged \
+    --device /dev/fuse \
+    --security-opt apparmor=unconfined \
     -v ./packages:/output \
     ghcr.io/tw93/pake \
-    https://example.com --name myapp --icon ./icon.png
-
+    https://example.com --name MyApp --icon ./icon.png --targets appimage
 ```

@@ -24,6 +24,9 @@ export interface PakeCliOptions {
   // Whether the window can be fullscreen, default false
   fullscreen: boolean;
 
+  // Start window maximized, default false
+  maximize: boolean;
+
   // Enable immersive header, default false.
   hideTitleBar: boolean;
 
@@ -73,14 +76,26 @@ export interface PakeCliOptions {
   // Installer language, valid for Windows users, default is en-US
   installerLanguage: string;
 
-  // Hide window on close instead of exiting, default false
-  hideOnClose: boolean;
+  // Hide window on close instead of exiting, platform-specific: true for macOS, false for others
+  hideOnClose: boolean | undefined;
 
   // Launch app in incognito/private mode, default false
   incognito: boolean;
 
   // Enable WebAssembly support (Flutter Web, etc.), default false
   wasm: boolean;
+
+  // Enable drag and drop functionality, default false
+  enableDragDrop: boolean;
+
+  // Keep raw binary file alongside installer, default false
+  keepBinary: boolean;
+
+  // Allow multiple instances, default false (single instance)
+  multiInstance: boolean;
+
+  // Start app minimized to tray, default false
+  startToTray: boolean;
 }
 
 export interface PakeAppOptions extends PakeCliOptions {

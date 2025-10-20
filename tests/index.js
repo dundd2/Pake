@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import ora from "ora";
 import config, { TIMEOUTS, TEST_URLS } from "./config.js";
+import { runHelperTests } from "./unit/helpers.test.js";
 
 class PakeTestRunner {
   constructor() {
@@ -42,6 +43,12 @@ class PakeTestRunner {
       console.log("📋 Running Unit Tests...");
       await this.runUnitTests();
       testCount++;
+
+      // Run helper function tests
+      const helperTestsPassed = await runHelperTests();
+      if (!helperTestsPassed) {
+        console.log("⚠️  Some helper tests failed");
+      }
     }
 
     if (integration && !quick) {
@@ -169,7 +176,7 @@ class PakeTestRunner {
     await this.runTest(
       "Help Command",
       () => {
-        const output = execSync(`node "${config.CLI_PATH}" --help`, {
+        const output = execSync(`node "${config.CLI_PATH}"`, {
           encoding: "utf8",
           timeout: 3000,
         });

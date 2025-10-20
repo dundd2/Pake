@@ -4,9 +4,10 @@ import chalk from 'chalk';
 import prompts from 'prompts';
 
 import { PakeAppOptions } from '@/types';
-import { checkRustInstalled, installRust } from '@/helpers/rust';
+import { checkRustInstalled, ensureRustEnv, installRust } from '@/helpers/rust';
 import { mergeConfig } from '@/helpers/merge';
 import tauriConfig from '@/helpers/tauriConfig';
+import { generateIdentifierSafeName } from '@/utils/name';
 import { npmDirectory } from '@/utils/dir';
 import { getSpinner } from '@/utils/info';
 import { shellExec } from '@/utils/shell';
@@ -37,25 +38,22 @@ export default abstract class BaseBuilder {
   }
 
   private getBuildTimeout(): number {
-    return 900000; // 15 minutes for all builds
+    return 900000;
   }
 
   private async detectPackageManager(): Promise<string> {
-    // 使用缓存避免重复检测
     if (BaseBuilder.packageManagerCache) {
       return BaseBuilder.packageManagerCache;
     }
 
     const { execa } = await import('execa');
 
-    // 优先使用pnpm（如果可用）
     try {
       await execa('pnpm', ['--version'], { stdio: 'ignore' });
       logger.info('✺ Using pnpm for package management.');
       BaseBuilder.packageManagerCache = 'pnpm';
       return 'pnpm';
     } catch {
-      // pnpm不可用，回退到npm
       try {
         await execa('npm', ['--version'], { stdio: 'ignore' });
         logger.info('✺ pnpm not available, using npm for package management.');
@@ -78,6 +76,8 @@ export default abstract class BaseBuilder {
       logger.warn('✼ The first use requires installing system dependencies.');
       logger.warn('✼ See more in https://tauri.app/start/prerequisites/.');
     }
+
+    ensureRustEnv();
 
     if (!checkRustInstalled()) {
       const res = await prompts({
@@ -120,13 +120,13 @@ export default abstract class BaseBuilder {
       const projectCnConf = path.join(tauriSrcPath, 'rust_proxy.toml');
       await fsExtra.copy(projectCnConf, projectConf);
       await shellExec(
-        `cd "${npmDirectory}" && ${packageManager} install${registryOption}${peerDepsOption} --silent`,
+        `cd "${npmDirectory}" && ${packageManager} install${registryOption}${peerDepsOption}`,
         timeout,
         buildEnv,
       );
     } else {
       await shellExec(
-        `cd "${npmDirectory}" && ${packageManager} install${peerDepsOption} --silent`,
+        `cd "${npmDirectory}" && ${packageManager} install${peerDepsOption}`,
         timeout,
         buildEnv,
       );
@@ -162,13 +162,54 @@ export default abstract class BaseBuilder {
     // Show static message to keep the status visible
     logger.warn('✸ Building app...');
 
-    const buildEnv = this.getBuildEnvironment();
+    const baseEnv = this.getBuildEnvironment();
+    let buildEnv: Record<string, string> = {
+      ...(baseEnv ?? {}),
+      ...(process.env.NO_STRIP ? { NO_STRIP: process.env.NO_STRIP } : {}),
+    };
 
-    await shellExec(
-      `cd "${npmDirectory}" && ${this.getBuildCommand(packageManager)}`,
-      this.getBuildTimeout(),
-      buildEnv,
-    );
+    const resolveExecEnv = () =>
+      Object.keys(buildEnv).length > 0 ? buildEnv : undefined;
+
+    // Warn users about potential AppImage build failures on modern Linux systems.
+    // The linuxdeploy tool bundled in Tauri uses an older strip tool that doesn't
+    // recognize the .relr.dyn section introduced in glibc 2.38+.
+    if (process.platform === 'linux' && this.options.targets === 'appimage') {
+      if (!buildEnv.NO_STRIP) {
+        logger.warn(
+          '⚠ Building AppImage on Linux may fail due to strip incompatibility with glibc 2.38+',
+        );
+        logger.warn(
+          '⚠ If build fails, retry with: NO_STRIP=1 pake <url> --targets appimage',
+        );
+      }
+    }
+
+    const buildCommand = `cd "${npmDirectory}" && ${this.getBuildCommand(packageManager)}`;
+    const buildTimeout = this.getBuildTimeout();
+
+    try {
+      await shellExec(buildCommand, buildTimeout, resolveExecEnv());
+    } catch (error) {
+      const shouldRetryWithoutStrip =
+        process.platform === 'linux' &&
+        this.options.targets === 'appimage' &&
+        !buildEnv.NO_STRIP &&
+        this.isLinuxDeployStripError(error);
+
+      if (shouldRetryWithoutStrip) {
+        logger.warn(
+          '⚠ AppImage build failed during linuxdeploy strip step, retrying with NO_STRIP=1 automatically.',
+        );
+        buildEnv = {
+          ...buildEnv,
+          NO_STRIP: '1',
+        };
+        await shellExec(buildCommand, buildTimeout, resolveExecEnv());
+      } else {
+        throw error;
+      }
+    }
 
     // Copy app
     const fileName = this.getFileName();
@@ -176,9 +217,21 @@ export default abstract class BaseBuilder {
     const appPath = this.getBuildAppPath(npmDirectory, fileName, fileType);
     const distPath = path.resolve(`${name}.${fileType}`);
     await fsExtra.copy(appPath, distPath);
+
+    // Copy raw binary if requested
+    if (this.options.keepBinary) {
+      await this.copyRawBinary(npmDirectory, name);
+    }
+
     await fsExtra.remove(appPath);
     logger.success('✔ Build success!');
     logger.success('✔ App installer located in', distPath);
+
+    // Log binary location if preserved
+    if (this.options.keepBinary) {
+      const binaryPath = this.getRawBinaryPath(name);
+      logger.success('✔ Raw binary located in', path.resolve(binaryPath));
+    }
   }
 
   protected getFileType(target: string): string {
@@ -186,6 +239,21 @@ export default abstract class BaseBuilder {
   }
 
   abstract getFileName(): string;
+
+  private isLinuxDeployStripError(error: unknown): boolean {
+    if (!(error instanceof Error) || !error.message) {
+      return false;
+    }
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('linuxdeploy') ||
+      message.includes('failed to run linuxdeploy') ||
+      message.includes('strip:') ||
+      message.includes('unable to recognise the format of the input file') ||
+      message.includes('appimage tool failed') ||
+      message.includes('strip tool')
+    );
+  }
 
   // 架构映射配置
   protected static readonly ARCH_MAPPINGS: Record<
@@ -260,6 +328,12 @@ export default abstract class BaseBuilder {
 
     if (target) {
       fullCommand += ` --target ${target}`;
+    }
+
+    // Enable verbose output in debug mode to help diagnose build issues.
+    // This provides detailed logs from Tauri CLI and bundler tools.
+    if (this.options.debug) {
+      fullCommand += ' --verbose';
     }
 
     return fullCommand;
@@ -337,5 +411,87 @@ export default abstract class BaseBuilder {
       bundleDir,
       `${fileName}.${fileType}`,
     );
+  }
+
+  /**
+   * Copy raw binary file to output directory
+   */
+  protected async copyRawBinary(
+    npmDirectory: string,
+    appName: string,
+  ): Promise<void> {
+    const binaryPath = this.getRawBinarySourcePath(npmDirectory, appName);
+    const outputPath = this.getRawBinaryPath(appName);
+
+    if (await fsExtra.pathExists(binaryPath)) {
+      await fsExtra.copy(binaryPath, outputPath);
+      // Make binary executable on Unix-like systems
+      if (process.platform !== 'win32') {
+        await fsExtra.chmod(outputPath, 0o755);
+      }
+    } else {
+      logger.warn(`✼ Raw binary not found at ${binaryPath}, skipping...`);
+    }
+  }
+
+  /**
+   * Get the source path of the raw binary file in the build directory
+   */
+  protected getRawBinarySourcePath(
+    npmDirectory: string,
+    appName: string,
+  ): string {
+    const basePath = this.options.debug ? 'debug' : 'release';
+    const binaryName = this.getBinaryName(appName);
+
+    // Handle cross-platform builds
+    if (this.options.multiArch || this.hasArchSpecificTarget()) {
+      return path.join(
+        npmDirectory,
+        this.getArchSpecificPath(),
+        basePath,
+        binaryName,
+      );
+    }
+
+    return path.join(npmDirectory, 'src-tauri/target', basePath, binaryName);
+  }
+
+  /**
+   * Get the output path for the raw binary file
+   */
+  protected getRawBinaryPath(appName: string): string {
+    const extension = process.platform === 'win32' ? '.exe' : '';
+    const suffix = process.platform === 'win32' ? '' : '-binary';
+    return `${appName}${suffix}${extension}`;
+  }
+
+  /**
+   * Get the binary name based on app name and platform
+   */
+  protected getBinaryName(appName: string): string {
+    const extension = process.platform === 'win32' ? '.exe' : '';
+
+    // Linux uses the unique binary name we set in merge.ts
+    if (process.platform === 'linux') {
+      return `pake-${generateIdentifierSafeName(appName)}${extension}`;
+    }
+
+    // Windows and macOS use 'pake' as binary name
+    return `pake${extension}`;
+  }
+
+  /**
+   * Check if this build has architecture-specific target
+   */
+  protected hasArchSpecificTarget(): boolean {
+    return false; // Override in subclasses if needed
+  }
+
+  /**
+   * Get architecture-specific path for binary
+   */
+  protected getArchSpecificPath(): string {
+    return 'src-tauri/target'; // Override in subclasses if needed
   }
 }
